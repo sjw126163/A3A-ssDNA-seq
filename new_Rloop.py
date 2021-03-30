@@ -3,54 +3,47 @@ import sys
 import re
 import pysam
 infile1 =pysam.AlignmentFile(sys.argv[1],"rb")
-name =sys.argv[1][:-4]+"_C_T_position.bed"
-outfile1 =open(name,"w")
+name = sys.argv[1][:-4]+"_C_T_position.bed"
+outfile1 = open(name, "w")
+p1 = re.compile(r"\D+")
+p2 = re.compile(r"\d+")
 for line in infile1:
-    if line.is_reverse ==True:
-    	mappos = "-"
-    if line.is_reverse ==False:
-    	mappos ="+"
-    header =line.query_name
-    mapq =line.mapping_quality
-    chr_name =str(line.reference_name)
-    start_pos =line.reference_start
-    seq =line.seq
-    length =0
-    storage =""
+    header = line.query_name
+    mapq = line.mapping_quality
+    chr_name = str(line.reference_name)
+    start_pos = line.reference_start
+    if mapq <= 10:
+        continue
+
+    if line.is_reverse:
+        strand = "-"
+    else:
+        strand = "+"
+    seq = line.query_alignment_sequence
     if line.has_tag('MD'):
-        mismatch =line.get_tag('MD')+"~"
-        dic1 ={"0","1","2","3","4","5","6","7","8","9"}
-        dic2 ={"A","N","T","G","a","t","g"}
-        for character in mismatch:
-            if character in dic1:
-                storage += character
-            if character not in dic1 and storage !="":
-                length += int(storage)
-            if character =="^":
-                storage =""
-                regexDe =re.search(r'\^+[A-Z]{1,}',mismatch)
-                if regexDe:
-                    count =int(regexDe.end(0)-regexDe.start(0)-1)
-                    seq =seq[0:length]+str("0"*count)+seq[length:]
-                    end =regexDe.end(0)
-                    mismatch =mismatch[end:]
-            if character in dic2:
-                length +=1
-                storage =""
-            if character =="C":
-                storage =""
-                if seq[length] =="T":
-                    pos1 =start_pos+length
-                    pos2 =pos1+1
-                    print(chr_name,pos1,pos2,header,mapq,mappos,sep="	",file =outfile1)
-                length +=1
-            if character =="c":
-                storage =""
-                if seq[length] =="t":
-                    pos1 =start_pos+length
-                    pos2 =pos1+1
-                    print(chr_name,pos1,pos2,header,mapq,mappos,sep="	",file =outfile1)
-                length +=1
+        mismatch = line.get_tag('MD')+"~"
+        refBases = p1.findall(mismatch)
+        refPositions = p2.findall(mismatch)
+        i = 0
+        refPos = start_pos
+        readPos = 0
+        while i < len(refBases)-1:
+            refBase = refBases[i]
+            pos = int(refPositions[i])
+            readPos = readPos + pos
+            refPos = refPos + pos
+
+            #print(seq[readPos],refBase)
+            if refBase == "C" and seq[readPos] == "T" :
+                print(chr_name, refPos, refPos + 1, header, mapq, strand, sep="	", file=outfile1)
+
+            if refBase[0] != "^":
+                readPos = readPos + 1
+                refPos = refPos + 1
+            else:
+                refPos = refPos + len(refBase)-1
+
+            i = i+1
 infile1.close()
 outfile1.close()
 
